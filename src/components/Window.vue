@@ -19,15 +19,17 @@
         @mousedown="onMouseDown"
         @click="showBody = !showBody"
       >
-        <img :src="ico" draggable="false" />
+        <img :src="icon" draggable="false" />
       </div>
-      <!-- <div class="tools">
+      <div class="tools">
         <img
-          @click="showScope = !showScope"
+          v-for="(item, index) in menus"
+          :key="index"
+          @click="item.handle"
           class="tools-item"
-          src="../assets/select.svg"
+          :src="item.icon"
         />
-      </div> -->
+      </div>
       <div class="body" ref="body">
         <slot></slot>
       </div>
@@ -40,13 +42,18 @@ export default {
   props: {
     width: String,
     height: String,
-    ico: String,
+    icon: String,
+
+    initLeft: Number,
+    initTop: Number,
+
+    menus: Array,
   },
   data() {
     return {
       moving: false,
-      left: 0,
-      top: 0,
+      left: this.initLeft || 0,
+      top: this.initTop || 0,
 
       downOffsetX: 0,
       downOffsetY: 0,
@@ -132,6 +139,8 @@ export default {
 }
 
 .tools {
+  display: flex;
+  flex-direction: column;
   position: absolute;
   top: 50%;
   right: -15px;
@@ -147,6 +156,7 @@ export default {
   padding: 5px;
   width: 20px;
   height: 20px;
+  margin: 3px;
 }
 .tools-item:active {
   box-shadow: #999 0 0 0 0;

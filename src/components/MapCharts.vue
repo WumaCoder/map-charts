@@ -1,7 +1,7 @@
 <template>
   <div class="map-charts">
     <div id="map"></div>
-    <Window :ico="countIco">
+    <Window :icon="countIcon" :menus="menus">
       <div class="charts" ref="charts"></div>
     </Window>
   </div>
@@ -10,11 +10,12 @@
 import { Marker, Scene, LineLayer } from "@antv/l7";
 import { GaodeMap } from "@antv/l7-maps";
 import { DrawControl } from "@antv/l7-draw";
-// import { DrillDownLayer } from "@antv/l7-district";
-// import { CountryLayer } from "@antv/l7-district";
+import { CountyLayer } from "@antv/l7-district";
 
 import { pointInPolygon } from "geometric";
 import * as echarts from "echarts";
+
+import countyCode from "../assets/countyCode";
 
 import Window from "./Window.vue";
 
@@ -61,12 +62,28 @@ export default {
   },
   components: { Window },
   data() {
+    let showCounty = false;
     return {
       // @ts-ignore
-      countIco: require("../assets/count.svg"),
+      countIcon: require("../assets/count.svg"),
       series: [],
       lines: [],
       select: this.value || [],
+
+      menus: [
+        {
+          // @ts-ignore
+          icon: require("../assets/fb.svg"),
+          handle: () => {
+            if (showCounty) {
+              this.county.hide();
+            } else {
+              this.county.show();
+            }
+            showCounty = !showCounty;
+          },
+        },
+      ],
     };
   },
   computed: {
@@ -173,50 +190,63 @@ export default {
       });
 
       scene.on("loaded", () => {
-        const drawControl = new DrawControl(scene, {
-          position: "topright",
-          layout: "horizontal", // horizontal vertical
-          controls: {
-            polygon: true,
-            rect: true,
-            delete: true,
-          },
-        });
-        drawControl.on("draw.create", (ev) => {
-          const selectMarkers = this.markers.filter((marker) => {
-            const polygon = ev.feature.geometry.coordinates[0];
-            return pointInPolygon([marker.longitude, marker.latitude], polygon);
+        initControl.call(this);
+        initCountyLayer.call(this);
+
+        function initControl() {
+          const drawControl = new DrawControl(scene, {
+            position: "topright",
+            layout: "horizontal", // horizontal vertical
+            controls: {
+              polygon: true,
+              rect: true,
+              delete: true,
+            },
           });
-          this.proxyValue = selectMarkers.map((m) => m.id);
-        });
-        scene.addControl(drawControl);
+          drawControl.on("draw.create", (ev) => {
+            // @ts-ignore
+            const selectMarkers = this.markers.filter((marker) => {
+              const polygon = ev.feature.geometry.coordinates[0];
+              return pointInPolygon(
+                [marker.longitude, marker.latitude],
+                polygon
+              );
+            });
+            this.proxyValue = selectMarkers.map((m) => m.id);
+          });
+          scene.addControl(drawControl);
+        }
+        function initCountyLayer() {
+          const colors = ["white", "green"];
 
-        // const colors = ["white", "red"];
-
-        // new DrillDownLayer(scene, {
-        //   data: [],
-        //   viewStart: "Country",
-        //   viewEnd: "City",
-        //   zIndex: 10,
-        //   fill: {
-        //     color: {
-        //       field: "NAME_CHN",
-        //       values: colors,
-        //     },
-        //   },
-        //   popup: {
-        //     enable: true,
-        //     Html: (props) => {
-        //       return `<span>${props.NAME_CHN}</span>`;
-        //     },
-        //   },
-        // });
-
-        console.log(scene);
-
-        // scene.on("click", (e) => {
-        //   console.log(e);
-        // });
+          this.county = new CountyLayer(scene, {
+            zIndex: 10,
+            visible: false,
+            data: countyCode
+              .filter((code) => code.startsWith("15"))
+              .map((code) => {
+                return {
+                  code,
+                  count: Math.floor(Math.random() * 100),
+                };
+              }),
+            adcode: countyCode.filter((code) => code.startsWith("15")),
+            depth: 3,
+            joinBy: ["adcode", "code"],
+            fill: {
+              color: {
+                field: "count",
+                values: colors,
+              },
+            },
+            label: {
+              textAllowOverlap: false,
+            },
+            popup: {
+              enable: false,
+            },
+          });
+        }
       });
       this.waitMapLoaded = function onLoaded() {
         return new Promise((resolve) => {
@@ -382,7 +412,7 @@ function createMarker({ text, color }) {
 }
 
 function createMarkerLine(marker) {
-  const layer = new LineLayer({ zIndex: 100 })
+  const layer = new LineLayer({ zIndex: 100, blend: "max" })
     .source(marker.line, {
       parser: {
         type: "json",
