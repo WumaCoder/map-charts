@@ -1,14 +1,22 @@
 <template>
   <div class="map-charts">
     <div id="map"></div>
-    <div class="charts" ref="charts"></div>
+    <Window :ico="countIco">
+      <div class="charts" ref="charts"></div>
+    </Window>
   </div>
 </template>
 <script>
-import { Marker, Scene } from "@antv/l7";
+import { Marker, Scene, LineLayer } from "@antv/l7";
 import { GaodeMap } from "@antv/l7-maps";
+import { DrawControl } from "@antv/l7-draw";
+// import { DrillDownLayer } from "@antv/l7-district";
+// import { CountryLayer } from "@antv/l7-district";
 
+import { pointInPolygon } from "geometric";
 import * as echarts from "echarts";
+
+import Window from "./Window.vue";
 
 export default {
   props: {
@@ -20,8 +28,9 @@ export default {
         pitch: 0,
         style: "light",
         center: [121.435159, 31.256971],
-        zoom: 14.89,
-        minZoom: 10,
+        zoom: 6,
+        // minZoom: 10,
+        token: "ba2513c38d63b973e454bc231ba1dbce",
       }),
     },
 
@@ -45,10 +54,18 @@ export default {
       type: Function,
       default: (data) => data.serie,
     },
+    onLoadLine: {
+      type: Function,
+      default: (data) => data.line,
+    },
   },
+  components: { Window },
   data() {
     return {
+      // @ts-ignore
+      countIco: require("../assets/count.svg"),
       series: [],
+      lines: [],
       select: this.value || [],
     };
   },
@@ -58,11 +75,12 @@ export default {
         return this.value || this.select;
       },
       set(v) {
+        v = [...new Set(v)];
         this.select = v;
         this.$emit("input", v);
       },
     },
-    selectMarker() {
+    selectedMarkers() {
       return this.proxyValue.map((id) =>
         this.markers.find((marker) => marker.id === id)
       );
@@ -79,18 +97,6 @@ export default {
         },
         yAxis: {},
         series: this.series,
-        // [
-        //   {
-        //     name: "销量",
-        //     type: "bar",
-        //     data: [5, 20, 36, 10, 10, 20],
-        //   },
-        //   {
-        //     name: "销量2",
-        //     type: "bar",
-        //     data: [5, 20, 36, 10, 10, 20],
-        //   },
-        // ],
       };
     },
     innerMarkers() {
@@ -115,8 +121,10 @@ export default {
   },
   watch: {
     location: {
+      immediate: true,
+      deep: true,
       async handler(v) {
-        await this.$nextTick();
+        await this.waitMap();
         this.scene.setCenter(v);
       },
     },
@@ -133,13 +141,23 @@ export default {
     innerMarkers: {
       immediate: true,
       async handler(markers = [], oldMarkers = []) {
-        await this.$nextTick();
+        await this.waitMap();
         const rmMarkers = oldMarkers.filter((om) => !markers.includes(om));
         const newMarkers = markers.filter((om) => !oldMarkers.includes(om));
         rmMarkers.forEach((marker) => marker.remove());
         newMarkers.forEach((marker) => {
           this.scene.addMarker(marker);
         });
+        // todo: 可以优化
+      },
+    },
+    selectedMarkers: {
+      immediate: true,
+      async handler(userMarkers) {
+        await this.$nextTick();
+        this.markers.forEach((m) => this.checkMarker(m, false));
+        userMarkers.forEach((um) => this.checkMarker(um, true));
+        // todo: 这块可以优化
       },
     },
   },
@@ -149,44 +167,146 @@ export default {
       return echarts.init(this.$refs.charts);
     },
     initGaodeMap() {
-      return new Scene({
+      const scene = new Scene({
         id: "map",
         map: new GaodeMap(this.defaultGaodeConfig),
       });
-    },
-    initMarker() {
-      this.innerMarkers.forEach((item) => {
-        if (this.proxyValue.includes(item.getExtData().data.id)) {
-          select(item);
-          this.onClickMarker(item.getExtData());
-        }
+
+      scene.on("loaded", () => {
+        const drawControl = new DrawControl(scene, {
+          position: "topright",
+          layout: "horizontal", // horizontal vertical
+          controls: {
+            polygon: true,
+            rect: true,
+            delete: true,
+          },
+        });
+        drawControl.on("draw.create", (ev) => {
+          const selectMarkers = this.markers.filter((marker) => {
+            const polygon = ev.feature.geometry.coordinates[0];
+            return pointInPolygon([marker.longitude, marker.latitude], polygon);
+          });
+          this.proxyValue = selectMarkers.map((m) => m.id);
+        });
+        scene.addControl(drawControl);
+
+        // const colors = ["white", "red"];
+
+        // new DrillDownLayer(scene, {
+        //   data: [],
+        //   viewStart: "Country",
+        //   viewEnd: "City",
+        //   zIndex: 10,
+        //   fill: {
+        //     color: {
+        //       field: "NAME_CHN",
+        //       values: colors,
+        //     },
+        //   },
+        //   popup: {
+        //     enable: true,
+        //     Html: (props) => {
+        //       return `<span>${props.NAME_CHN}</span>`;
+        //     },
+        //   },
+        // });
+
+        console.log(scene);
+
+        // scene.on("click", (e) => {
+        //   console.log(e);
+        // });
       });
+      this.waitMapLoaded = function onLoaded() {
+        return new Promise((resolve) => {
+          scene.on("loaded", function onLoaded() {
+            resolve();
+            scene.off("loaded", onLoaded);
+          });
+        });
+      };
+      // const flydata = [
+      //   {
+      //     name: "path1",
+      //     coord: [
+      //       [58.00781249999999, 32.84267363195431],
+      //       [85.78125, 25.16517336866393],
+      //     ],
+      //   },
+      // ];
+
+      return scene;
+    },
+    async waitMap() {
+      await this.$nextTick();
+      await this.waitMapLoaded();
+    },
+    async onClickMarker(e) {
+      if (e.select) {
+        this.proxyValue = [...this.proxyValue, e.data.id];
+      } else {
+        const index = this.proxyValue.indexOf(e.data.id);
+        const _temp = this.proxyValue.slice();
+        _temp.splice(index, 1);
+        this.proxyValue = _temp;
+      }
+    },
+    async checkMarker(userMarker, bool) {
+      select(userMarker.innerMarker, bool);
+      if (bool) {
+        const serie = await this.onLoadSerie(userMarker);
+        this.addSerie(userMarker, serie);
+
+        const line = await this.onLoadLine(userMarker);
+        this.addLine(userMarker, line);
+      } else {
+        this.delSerie(userMarker);
+        this.delLine(userMarker);
+      }
+    },
+    addSerie(userMarker, serie) {
+      if (serie && serie.type) {
+        this.series.push(this.bindSerie(serie, userMarker));
+      } else {
+        console.warn("not serie");
+      }
+    },
+    delSerie(userMarker) {
+      const index = this.series.findIndex(
+        (item) => userMarker.serie === item || userMarker.id == item.id
+      );
+      if (index !== -1) this.series.splice(index, 1);
     },
     bindSerie(serie, data) {
       if (data.id) serie.id = data.id;
       serie.itemStyle = { color: data.color };
       return serie;
     },
-    async onClickMarker(e) {
-      if (e.select) {
-        this.proxyValue = [...this.proxyValue, e.data.id];
-        const serie = await this.onLoadSerie(e.data, e);
-        if (serie && serie.type) {
-          this.series.push(this.bindSerie(serie, e.data));
-        } else {
-          console.warn("not serie");
-        }
+    addLine(userMarker, line) {
+      if (line && line.length) {
+        this.lines.push(this.bindLine(line, userMarker));
+        this.scene.addLayer(line.layer);
       } else {
-        const valIndex = this.proxyValue.indexOf(e.data.id);
-        const _value = [...this.proxyValue];
-        _value.splice(valIndex, 1);
-        if (valIndex !== -1) this.proxyValue = _value;
-
-        const index = this.series.findIndex(
-          (item) => e.data.serie === item || e.data.id == item.id
-        );
-        if (index !== -1) this.series.splice(index, 1);
+        console.warn("not line");
       }
+    },
+    delLine(userMarker) {
+      const index = this.lines.findIndex(
+        (item) => userMarker.line === item || userMarker.id == item.id
+      );
+      if (index !== -1) {
+        const line = this.lines[index];
+        this.lines.splice(index, 1);
+        this.scene.removeLayer(line.layer);
+      }
+    },
+    bindLine(line, data) {
+      if (data.id) line.id = data.id;
+      if (data.color) line.color = data.color;
+      const lineLayer = createMarkerLine(data);
+      line.layer = lineLayer;
+      return line;
     },
     async updateCharts() {
       for (let i = 0; i < this.series.length; i++) {
@@ -209,8 +329,6 @@ export default {
     this.charts = this.initECharts();
 
     this.scene = this.initGaodeMap();
-
-    this.initMarker();
   },
   destroyed() {
     this.charts.dispose();
@@ -227,6 +345,7 @@ function toInnerMarker(marker, clickCallback) {
   const m = new Marker({
     extData: data,
     element: createMarker(marker),
+    offsets: [0, 10],
   }).setLnglat({
     lng: marker.longitude,
     lat: marker.latitude,
@@ -261,6 +380,29 @@ function createMarker({ text, color }) {
 
   return markerWrapper;
 }
+
+function createMarkerLine(marker) {
+  const layer = new LineLayer({ zIndex: 100 })
+    .source(marker.line, {
+      parser: {
+        type: "json",
+        coordinates: "path",
+      },
+    })
+    .color(marker.color)
+    .shape("arc")
+    .size(2)
+    .active(true)
+    .animate({
+      interval: 2,
+      trailLength: 2,
+      duration: 1,
+    })
+    .style({
+      opacity: 1,
+    });
+  return layer;
+}
 </script>
 <style>
 .map-charts {
@@ -270,15 +412,14 @@ function createMarker({ text, color }) {
 }
 #map {
   position: absolute;
-  width: 50%;
+  width: 100%;
   height: 100%;
 }
 .charts {
   position: absolute;
-
-  right: 0;
-  width: 50%;
+  width: 100%;
   height: 100%;
+  padding-top: 10px;
 }
 .marker:not(.select) .marker-point {
   background: #999 !important;
