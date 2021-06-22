@@ -1,15 +1,17 @@
 <template>
-  <div id="app">
-    <MapCharts
-      v-model="select"
-      :latitude="41.202626"
-      :longitude="111.778313"
-      :chartsTitle="chartsTitle"
-      :markers="markers"
-      :xAxisData="xAxisData"
-      ref="mc"
-    ></MapCharts>
-  </div>
+  <v-app>
+    <v-main>
+      <MapCharts
+        v-model="select"
+        :latitude="41.202626"
+        :longitude="111.778313"
+        :chartsTitle="chartsTitle"
+        :markers="markers"
+        :xAxisData="xAxisData"
+        ref="mc"
+      ></MapCharts>
+    </v-main>
+  </v-app>
 </template>
 
 <script>
@@ -150,10 +152,3 @@ export default {
   },
 };
 </script>
-<style>
-html,
-body {
-  padding: 0;
-  margin: 0;
-}
-</style>
