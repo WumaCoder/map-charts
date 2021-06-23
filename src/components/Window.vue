@@ -143,7 +143,7 @@ export default {
   flex-direction: column;
   position: absolute;
   top: 50%;
-  right: -15px;
+  right: -18px;
   transform: translateY(-50%);
   z-index: 103;
   user-select: none;
@@ -154,8 +154,8 @@ export default {
   box-shadow: #999 0 0 3px 0;
   background: #fff;
   padding: 5px;
-  width: 20px;
-  height: 20px;
+  width: 30px;
+  height: 30px;
   margin: 3px;
 }
 .tools-item:active {

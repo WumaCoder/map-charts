@@ -1,9 +1,31 @@
 <template>
   <div class="map-charts">
     <div id="map"></div>
-    <Window :icon="countIcon" :menus="menus">
+    <Window :icon="countIcon">
       <div class="charts" ref="charts"></div>
     </Window>
+    <div class="select-box">
+      <div class="select-item">
+        <v-select
+          :items="['选择查看城市', '内蒙', '北京', '天津']"
+          label="选择城市"
+          dense
+          solo
+          @change="onChangeSelect"
+        ></v-select>
+      </div>
+      <div class="select-item">
+        <v-select
+          class="select-item"
+          :items="['选择查看数据分布', '羊肉分布', '猪肉分布', '牛肉分布']"
+          label="数据分布"
+          dense
+          solo
+          @change="onChangeSelect"
+        ></v-select>
+      </div>
+    </div>
+    <!-- <Window height="40px"> </Window> -->
   </div>
 </template>
 <script>
@@ -59,6 +81,8 @@ export default {
       type: Function,
       default: (data) => data.line,
     },
+
+    selectItems: Array,
   },
   components: { Window },
   data() {
@@ -217,19 +241,12 @@ export default {
           scene.addControl(drawControl);
         }
         function initCountyLayer() {
-          const colors = ["white", "green"];
+          const colors = ["red", "orange", "green", "green"];
 
           this.county = new CountyLayer(scene, {
             zIndex: 10,
-            visible: false,
-            data: countyCode
-              .filter((code) => code.startsWith("15"))
-              .map((code) => {
-                return {
-                  code,
-                  count: Math.floor(Math.random() * 100),
-                };
-              }),
+            visible: true,
+            data: [],
             adcode: countyCode.filter((code) => code.startsWith("15")),
             depth: 3,
             joinBy: ["adcode", "code"],
@@ -243,7 +260,7 @@ export default {
               textAllowOverlap: false,
             },
             popup: {
-              enable: false,
+              Html: (prop) => `${prop.NAME_CHN}<br>年产量：${prop.count}只`,
             },
           });
         }
@@ -256,16 +273,6 @@ export default {
           });
         });
       };
-      // const flydata = [
-      //   {
-      //     name: "path1",
-      //     coord: [
-      //       [58.00781249999999, 32.84267363195431],
-      //       [85.78125, 25.16517336866393],
-      //     ],
-      //   },
-      // ];
-
       return scene;
     },
     async waitMap() {
@@ -354,6 +361,18 @@ export default {
         }
       }
     },
+    onChangeSelect(v) {
+      console.log(v);
+      const data = countyCode
+        .filter((code) => code.startsWith("15"))
+        .map((code) => {
+          return {
+            code,
+            count: Math.floor(Math.random() * 100),
+          };
+        });
+      this.county.updateData(data);
+    },
   },
   mounted() {
     this.charts = this.initECharts();
@@ -421,7 +440,7 @@ function createMarkerLine(marker) {
     })
     .color(marker.color)
     .shape("arc")
-    .size(2)
+    .size(5)
     .active(true)
     .animate({
       interval: 2,
@@ -451,6 +470,20 @@ function createMarkerLine(marker) {
   height: 100%;
   padding-top: 10px;
 }
+
+.select-box {
+  display: flex;
+  position: fixed;
+  z-index: 100;
+  width: 300px;
+  right: 10px;
+  bottom: 0;
+}
+
+.select-item {
+  margin-left: 10px;
+}
+
 .marker:not(.select) .marker-point {
   background: #999 !important;
 }
