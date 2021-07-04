@@ -32,6 +32,7 @@ export default {
           id: 1,
           text: "测试1",
           color: "blue",
+          value: 10,
           longitude: 111.778313,
           latitude: 41.202626,
           serie: {
@@ -64,6 +65,7 @@ export default {
           color: "yellow",
           longitude: 116.414543,
           latitude: 43.67502,
+          value: 20,
           serie: {
             type: "line",
             data: [
@@ -80,6 +82,7 @@ export default {
           color: "red",
           longitude: 109.537102,
           latitude: 40.245149,
+          value: 30,
           serie: {
             type: "line",
             data: [
@@ -96,6 +99,7 @@ export default {
           color: "green",
           longitude: 121.512199,
           latitude: 45.720751,
+          value: 30,
           serie: {
             type: "bar",
             data: [

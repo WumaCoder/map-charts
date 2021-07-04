@@ -6,26 +6,43 @@
     </Window>
     <div class="select-box">
       <div class="select-item">
+        <v-slider v-model="slider" step="10" thumb-label ticks></v-slider>
+      </div>
+      <div class="select-item">
         <v-select
-          :items="['选择查看城市', '内蒙', '北京', '天津']"
-          label="选择城市"
+          v-model="mapStat.province"
+          :items="mapCode"
+          item-text="label"
+          item-value="value"
+          label="选择省份"
           dense
           solo
-          @change="onChangeSelect"
         ></v-select>
       </div>
       <div class="select-item">
         <v-select
+          v-model="mapStat.level"
+          :items="levelCode"
+          item-text="label"
+          item-value="value"
+          label="选择级别"
+          dense
+          solo
+        ></v-select>
+      </div>
+      <div class="select-item">
+        <v-select
+          v-model="stat"
+          :items="statList"
+          item-text="label"
+          item-value="value"
           class="select-item"
-          :items="['选择查看数据分布', '羊肉分布', '猪肉分布', '牛肉分布']"
           label="数据分布"
           dense
           solo
-          @change="onChangeSelect"
         ></v-select>
       </div>
     </div>
-    <!-- <Window height="40px"> </Window> -->
   </div>
 </template>
 <script>
@@ -37,7 +54,7 @@ import { CountyLayer } from "@antv/l7-district";
 import { pointInPolygon } from "geometric";
 import * as echarts from "echarts";
 
-import countyCode from "../assets/countyCode";
+// import mapCode from "../assets/mapCode";
 
 import Window from "./Window.vue";
 
@@ -48,7 +65,7 @@ export default {
     defaultGaodeConfig: {
       type: Object,
       default: () => ({
-        pitch: 0,
+        pitch: 40,
         style: "light",
         center: [121.435159, 31.256971],
         zoom: 6,
@@ -90,9 +107,45 @@ export default {
     return {
       // @ts-ignore
       countIcon: require("../assets/count.svg"),
+      mapCode: [],
+      levelCode: [
+        {
+          label: "市级",
+          value: 2,
+        },
+        {
+          label: "县级",
+          value: 3,
+        },
+      ],
+      statList: [
+        {
+          label: "请选择统计数据",
+          value: -1,
+        },
+        {
+          label: "猪肉",
+          value: 0,
+        },
+        {
+          label: "羊肉",
+          value: 1,
+        },
+        {
+          label: "牛肉",
+          value: 2,
+        },
+      ],
+      mapStat: {
+        province: "",
+        level: 2,
+      },
+      stat: -1,
+
       series: [],
       lines: [],
       select: this.value || [],
+      slider: 30,
 
       menus: [
         {
@@ -100,9 +153,9 @@ export default {
           icon: require("../assets/fb.svg"),
           handle: () => {
             if (showCounty) {
-              this.county.hide();
+              this.mapStatLayer.hide();
             } else {
-              this.county.show();
+              this.mapStatLayer.show();
             }
             showCounty = !showCounty;
           },
@@ -161,6 +214,62 @@ export default {
     },
   },
   watch: {
+    slider(slider) {
+      this.proxyValue = this.innerMarkers
+        .filter((item) => item.getExtData().data.value <= slider)
+        .map((item) => item.getExtData().data.id);
+    },
+    stat(stat) {
+      if (stat === -1) return;
+      const mapList = { 2: getCity, 3: getCount };
+      const data = mapList[this.mapStat.level](
+        this.mapCode,
+        this.mapStat.province
+      )
+        .map((item) => item.value)
+        .map((code) => {
+          return {
+            code,
+            count: Math.floor(Math.random() * 100),
+          };
+        });
+      this.mapStatLayer.updateData(data);
+    },
+    mapStat: {
+      deep: true,
+      handler(mapStat) {
+        const mapList = { 2: getCity, 3: getCount };
+        const colors = ["orange", "green", "green"];
+        this.stat = -1;
+        this.mapStatLayer?.destroy();
+        this.mapStatLayer = new CountyLayer(this.scene, {
+          autoFit: false,
+          zIndex: -1,
+          visible: true,
+          stroke: "red",
+          data: [],
+          joinBy: ["adcode", "code"],
+          fill: {
+            color: {
+              field: "count",
+              values: colors,
+            },
+          },
+          label: {
+            enable: false,
+            opacity: 0.8,
+            textAllowOverlap: false,
+          },
+          popup: {
+            Html: (prop) => `${prop.NAME_CHN}<br>年产量：${prop.count}只`,
+          },
+          depth: mapStat.level,
+          adcode: mapList[mapStat.level](this.mapCode, mapStat.province).map(
+            (item) => item.value
+          ),
+        });
+      },
+    },
     location: {
       immediate: true,
       deep: true,
@@ -240,29 +349,8 @@ export default {
           });
           scene.addControl(drawControl);
         }
-        function initCountyLayer() {
-          const colors = ["red", "orange", "green", "green"];
-
-          this.county = new CountyLayer(scene, {
-            zIndex: 10,
-            visible: true,
-            data: [],
-            adcode: countyCode.filter((code) => code.startsWith("15")),
-            depth: 3,
-            joinBy: ["adcode", "code"],
-            fill: {
-              color: {
-                field: "count",
-                values: colors,
-              },
-            },
-            label: {
-              textAllowOverlap: false,
-            },
-            popup: {
-              Html: (prop) => `${prop.NAME_CHN}<br>年产量：${prop.count}只`,
-            },
-          });
+        async function initCountyLayer() {
+          // todo: 后期可以需要
         }
       });
       this.waitMapLoaded = function onLoaded() {
@@ -361,18 +449,20 @@ export default {
         }
       }
     },
-    onChangeSelect(v) {
-      console.log(v);
-      const data = countyCode
-        .filter((code) => code.startsWith("15"))
-        .map((code) => {
-          return {
-            code,
-            count: Math.floor(Math.random() * 100),
-          };
-        });
-      this.county.updateData(data);
+    onChangeSelect() {},
+    onChangeProvinceSelect(code) {
+      console.log(getCount(this.mapCode, code));
+      this.mapStatLayer.updateDistrict(
+        getCity(this.mapCode, code).map((n) => n.value)
+      );
     },
+
+    onChangeLevelSelect() {},
+  },
+  async beforeCreate() {
+    this.mapCode = await import("../assets/mapCode.js").then(
+      (res) => res.default
+    );
   },
   mounted() {
     this.charts = this.initECharts();
@@ -431,7 +521,7 @@ function createMarker({ text, color }) {
 }
 
 function createMarkerLine(marker) {
-  const layer = new LineLayer({ zIndex: 100, blend: "max" })
+  const layer = new LineLayer({ zIndex: 1, blend: "max" })
     .source(marker.line, {
       parser: {
         type: "json",
@@ -439,8 +529,8 @@ function createMarkerLine(marker) {
       },
     })
     .color(marker.color)
-    .shape("arc")
-    .size(5)
+    .shape("arc3d")
+    .size(3)
     .active(true)
     .animate({
       interval: 2,
@@ -451,6 +541,19 @@ function createMarkerLine(marker) {
       opacity: 1,
     });
   return layer;
+}
+
+function getCity(mapCode = [], code) {
+  return mapCode.find((item) => item.value === code).children;
+}
+
+function getCount(mapCode = [], code) {
+  return mapCode
+    .find((item) => item.value === code)
+    .children.reduce((prev, item) => {
+      prev = prev.concat(item.children);
+      return prev;
+    }, []);
 }
 </script>
 <style>
@@ -472,16 +575,18 @@ function createMarkerLine(marker) {
 }
 
 .select-box {
+  width: 100%;
   display: flex;
+  align-items: center;
   position: fixed;
   z-index: 100;
-  width: 300px;
   right: 10px;
   bottom: 0;
 }
 
 .select-item {
   margin-left: 10px;
+  flex: 1;
 }
 
 .marker:not(.select) .marker-point {
