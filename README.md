@@ -74,4 +74,4 @@ updateCharts(); // 更新图表方法
 
 ## About Issue
 
-...
+有问题，请提交 Issue
