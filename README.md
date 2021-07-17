@@ -71,3 +71,7 @@ yarn build
 ```js
 updateCharts(); // 更新图表方法
 ```
+
+## About Issue
+
+...
