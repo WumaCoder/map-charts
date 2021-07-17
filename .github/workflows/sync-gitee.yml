@@ -12,5 +12,6 @@ jobs:
         with:
           src: github/WumaCoder
           dst: gitee/WumaCoder
-          dst_key: ${{ secrets.GITEE_KEY }}
+          dst_key: ${{ secrets.SSH_PRIVATE }}
+          dst_token: ${{ secrets.GITEE_KEY }}
           white_list: "map-charts"
