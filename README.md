@@ -1,5 +1,7 @@
 # map-charts
 
+![Gitee](https://github.com/WumaCoder/map-charts/workflows/SyncGitee/badge.svg)
+
 ![image-20210619134907709](README.assets/image-20210619134907709.png)
 
 ## Project setup
